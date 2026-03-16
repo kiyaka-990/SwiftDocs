@@ -40,6 +40,6 @@ app.include_router(templates.router,  prefix="/api/templates", tags=["Templates"
 app.include_router(webhooks.router,   prefix="/api/webhooks",  tags=["Webhooks"])
 
 
-@app.get("/health")
+@app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "SwiftDocs API"}
+    return {"status": "ok"}
