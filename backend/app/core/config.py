@@ -1,6 +1,7 @@
 # backend/app/core/config.py
 from pydantic_settings import BaseSettings
 from typing import List
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -35,12 +36,17 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
-        "https://swiftdocs.io",
-        "https://www.swiftdocs.io",
-    ]
+        ]
 
     class Config:
         env_file = ".env"
+@field_validator("ALLOWED_ORIGINS", mode="before")
+@classmethod
+def parse_origins(cls, v):
+    if isinstance(v, str):
+        import json
+        return json.loads(v)
+    return v
 
 
 settings = Settings()
