@@ -1,0 +1,12 @@
+{
+  "invoice_number": "INV-001",
+  "date": "24 March 2026",
+  "due_date": "7 April 2026",
+  "from_name": "My Company",
+  "from_address": ["123 Main St", "Nairobi, Kenya"],
+  "to_name": "Client Name",
+  "to_address": ["456 Other St", "Nairobi, Kenya"],
+  "currency": "KES",
+  "tax_rate": 0.16,
+  "items": [{"description": "Web Development Services", "qty": 1, "unit_price": 50000}]
+}

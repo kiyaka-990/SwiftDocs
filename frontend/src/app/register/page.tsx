@@ -24,7 +24,7 @@ export default function RegisterPage() {
       toast.success("Account created! 3 free docs added.")
       router.push("/dashboard")
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Registration failed")
+      toast.error(err?.response?.data?.detail || err?.message || "Registration failed")
     } finally {
       setLoading(false)
     }

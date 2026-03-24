@@ -1,7 +1,6 @@
 # backend/app/core/config.py
 from pydantic_settings import BaseSettings
 from typing import List
-from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -31,22 +30,16 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
 
     # Pricing (in cents)
-    PRICE_PER_DOCUMENT: int = 99        # $0.99 per doc
-    FREE_TIER_DOCS: int = 3             # 3 free docs on signup
-
-    ALLOWED_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        ]
+    PRICE_PER_DOCUMENT: int = 99
+    FREE_TIER_DOCS: int = 3
 
     class Config:
         env_file = ".env"
-@field_validator("ALLOWED_ORIGINS", mode="before")
-@classmethod
-def parse_origins(cls, v):
-    if isinstance(v, str):
-        import json
-        return json.loads(v)
-    return v
 
 
 settings = Settings()
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]

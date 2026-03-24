@@ -7,7 +7,7 @@ import toast from "react-hot-toast"
 import {
   Zap, FileText, Key, CreditCard, LogOut,
   Plus, Download, Clock, CheckCircle, XCircle,
-  Copy, Trash2, RefreshCw, ExternalLink
+  Copy, Trash2, RefreshCw
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -89,9 +89,26 @@ export default function Dashboard() {
     }
   }
 
+  // BUG FIX 4: download was hardcoded to http://localhost:8000.
+  // Now uses the existing `api` axios instance so it works in all environments.
+  async function downloadDoc(doc: Doc) {
+    if (!doc.download_url) return
+    try {
+      const res = await api.get(doc.download_url, { responseType: "blob" })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${doc.template}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error("Download failed")
+    }
+  }
+
   const statusIcon = (s: string) => {
-    if (s === "done")       return <CheckCircle className="w-4 h-4 text-green-400" />
-    if (s === "failed")     return <XCircle className="w-4 h-4 text-red-400" />
+    if (s === "done")   return <CheckCircle className="w-4 h-4 text-green-400" />
+    if (s === "failed") return <XCircle className="w-4 h-4 text-red-400" />
     return <Clock className="w-4 h-4 text-yellow-400 animate-pulse" />
   }
 
@@ -189,7 +206,7 @@ export default function Dashboard() {
                       <div className="text-xs text-gray-500 font-mono truncate">{doc.id}</div>
                     </div>
                     <span className={`badge ${
-                      doc.status === "done" ? "bg-green-500/10 text-green-400" :
+                      doc.status === "done"   ? "bg-green-500/10 text-green-400" :
                       doc.status === "failed" ? "bg-red-500/10 text-red-400" :
                       "bg-yellow-500/10 text-yellow-400"
                     }`}>{doc.status}</span>
@@ -197,27 +214,13 @@ export default function Dashboard() {
                       {new Date(doc.created_at).toLocaleDateString()}
                     </span>
                     {doc.download_url && (
-  <button
-    onClick={async () => {
-      const raw = localStorage.getItem("swiftdocs-auth")
-      const token = raw ? JSON.parse(raw)?.state?.token : null
-      const res = await fetch(`http://localhost:8000${doc.download_url}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) { toast.error("Download failed"); return }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${doc.template}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-    }}
-    className="btn-ghost text-xs px-3 py-1.5"
-  >
-    <Download className="w-3.5 h-3.5" /> Download
-  </button>
-)}
+                      <button
+                        onClick={() => downloadDoc(doc)}
+                        className="btn-ghost text-xs px-3 py-1.5"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Download
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -289,10 +292,10 @@ export default function Dashboard() {
         {tab === "billing" && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { id: "starter",  credits: 10,  price: "$8",   label: "Starter"   },
-              { id: "growth",   credits: 50,  price: "$35",  label: "Growth", highlight: true },
-              { id: "pro",      credits: 200, price: "$120", label: "Pro"       },
-              { id: "team",     credits: 999, price: "$399", label: "Unlimited" },
+              { id: "starter",  credits: 10,  price: "$8",   label: "Starter"                    },
+              { id: "growth",   credits: 50,  price: "$35",  label: "Growth",  highlight: true   },
+              { id: "pro",      credits: 200, price: "$120", label: "Pro"                         },
+              { id: "team",     credits: 999, price: "$399", label: "Unlimited"                   },
             ].map((p) => (
               <div key={p.id} className={`card flex flex-col ${(p as any).highlight ? "border-brand-500" : ""}`}>
                 <div className="text-gray-400 text-sm mb-1">{p.label}</div>
@@ -300,8 +303,10 @@ export default function Dashboard() {
                 <div className="text-gray-500 text-sm mb-6">
                   {p.credits === 999 ? "Unlimited documents" : `${p.credits} documents`}
                 </div>
-                <button onClick={() => buyCredits(p.id)}
-                  className={`mt-auto ${(p as any).highlight ? "btn-primary justify-center" : "btn-ghost border border-dark-500 rounded-xl justify-center"}`}>
+                <button
+                  onClick={() => buyCredits(p.id)}
+                  className={`mt-auto ${(p as any).highlight ? "btn-primary justify-center" : "btn-ghost border border-dark-500 rounded-xl justify-center"}`}
+                >
                   Buy now
                 </button>
               </div>

@@ -61,22 +61,36 @@ async def get_user_flexible(
 
 
 async def call_engine(template: str, payload: dict, output_path: str) -> dict:
-    payload_str = json.dumps(payload)
-    cmd = [
-        settings.ENGINE_BIN,
-        "--template", template,
-        "--payload",  payload_str,
-        "--output",   output_path,
-    ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-    if proc.returncode != 0:
-        raise RuntimeError(f"Engine error: {stderr.decode()}")
-    return json.loads(stdout.decode())
+    # Write payload to a temp file instead of passing it as a CLI string.
+    # This avoids all shell quoting / BOM issues on every OS.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    ) as pf:
+        json.dump(payload, pf, ensure_ascii=False)
+        payload_file = pf.name
+
+    try:
+        cmd = [
+            settings.ENGINE_BIN,
+            "--template",     template,
+            "--payload-file", payload_file,
+            "--output",       output_path,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        if proc.returncode != 0:
+            raise RuntimeError(f"Engine error: {stderr.decode()}")
+        return json.loads(stdout.decode())
+    finally:
+        # Always clean up the temp payload file
+        try:
+            os.unlink(payload_file)
+        except OSError:
+            pass
 
 
 async def generate_task(doc_id: str, template: str, payload: dict):
@@ -98,7 +112,7 @@ async def generate_task(doc_id: str, template: str, payload: dict):
             shutil.copy(tmp_path, local_file)
             os.unlink(tmp_path)
             doc.status = "done"
-            doc.file_url = f"/api/documents/{doc_id}/download"
+            doc.file_url = f"/documents/{doc_id}/download"
             doc.file_size = engine_result.get("bytes", 0)
             await db.commit()
         except Exception as e:

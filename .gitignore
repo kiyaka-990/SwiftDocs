@@ -1,64 +1,73 @@
-# ── Dependencies ────────────────────────────────────────────────────────────
-node_modules/
-.pnp
-.pnp.js
-
-# ── Next.js ─────────────────────────────────────────────────────────────────
-.next/
-out/
-build/
-
-# ── Environment variables ────────────────────────────────────────────────────
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env*.local
-
-# ── Rust / Cargo ─────────────────────────────────────────────────────────────
-engine/target/
-**/*.rs.bk
-Cargo.lock
-
-# ── Python ───────────────────────────────────────────────────────────────────
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
-.venv/
-venv/
+*.pyd
+.Python
+*.egg
 *.egg-info/
 dist/
-.pytest_cache/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+.venv/
+venv/
+ENV/
+env/
 
-# ── Docker ───────────────────────────────────────────────────────────────────
-*.env.docker
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
 
-# ── Database ─────────────────────────────────────────────────────────────────
-*.sqlite
-*.db
-pgdata/
+# ── Rust / Cargo ──────────────────────────────────────────────────────────────
+engine/target/
+engine/vendor/
+engine/.cargo/
 
-# ── Logs ─────────────────────────────────────────────────────────────────────
-*.log
+# ── Node / Next.js ────────────────────────────────────────────────────────────
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env.local
+frontend/.env.*.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# ── OS ───────────────────────────────────────────────────────────────────────
-.DS_Store
-Thumbs.db
-desktop.ini
+# ── Docker ────────────────────────────────────────────────────────────────────
+outputs/
 
-# ── Editor ───────────────────────────────────────────────────────────────────
+# ── Database ──────────────────────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
+.DS_Store
+Thumbs.db
 
-# ── Misc ─────────────────────────────────────────────────────────────────────
-.vercel
-.turbo
-coverage/
-*.tsbuildinfo
-next-env.d.ts
+# ── Stripe ────────────────────────────────────────────────────────────────────
+stripe.exe
+stripe
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+build-log.txt
+
+# ── Test output ───────────────────────────────────────────────────────────────
+test_output.pdf
+*.pdf

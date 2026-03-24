@@ -89,8 +89,9 @@ async def get_user_from_api_key(
     key_obj = result.scalar_one_or_none()
     if not key_obj:
         return None
-    # Update last_used
+    # BUG FIX 3: last_used update was never committed
     key_obj.last_used = datetime.utcnow()
+    await db.commit()
     result2 = await db.execute(select(User).where(User.id == key_obj.user_id))
     return result2.scalar_one_or_none()
 
@@ -109,7 +110,9 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         credits=settings.FREE_TIER_DOCS,
     )
     db.add(user)
+    # BUG FIX 2: flush() assigns the ID but never wrote to DB — added commit()
     await db.flush()
+    await db.commit()
 
     token = create_access_token({"sub": str(user.id)})
     return TokenResponse(
@@ -163,7 +166,9 @@ async def create_api_key(
         name=body.name,
     )
     db.add(key_obj)
+    # BUG FIX 2 (same pattern): flush + commit so the key is actually persisted
     await db.flush()
+    await db.commit()
     return ApiKeyResponse(
         id=str(key_obj.id),
         name=key_obj.name,
@@ -209,4 +214,5 @@ async def revoke_api_key(
     if not key_obj:
         raise HTTPException(404, "API key not found")
     key_obj.is_active = False
+    await db.commit()
     return {"ok": True}
