@@ -6,7 +6,7 @@ from pydantic import field_validator
 
 class Settings(BaseSettings):
     APP_NAME: str = "SwiftDocs"
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str = "d1a3f01aa1c4ea4998443811b4f96319c25349986ec81c311a17784de411d821"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
@@ -49,3 +49,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+ALLOWED_ORIGINS = settings.ALLOWED_ORIGINS
