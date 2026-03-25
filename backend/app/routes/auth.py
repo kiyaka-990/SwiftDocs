@@ -18,19 +18,23 @@ router = APIRouter()
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
     email: EmailStr
     name: str
     password: str
 
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    credits: int
+    credits_used: int  # Added to match frontend requirements
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    user_id: str
-    email: str
-    credits: int
+    user: UserResponse # Nested user object for cleaner frontend storage
 
 class ApiKeyCreate(BaseModel):
     name: str
@@ -40,7 +44,6 @@ class ApiKeyResponse(BaseModel):
     name: str
     key: str
     created_at: datetime
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def hash_password(pw: str) -> str:
@@ -79,24 +82,8 @@ async def get_current_user(
         raise cred_exc
     return user
 
-async def get_user_from_api_key(
-    api_key: str,
-    db: AsyncSession,
-) -> User | None:
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.key == api_key, ApiKey.is_active == True)
-    )
-    key_obj = result.scalar_one_or_none()
-    if not key_obj:
-        return None
-    # BUG FIX 3: last_used update was never committed
-    key_obj.last_used = datetime.utcnow()
-    await db.commit()
-    result2 = await db.execute(select(User).where(User.id == key_obj.user_id))
-    return result2.scalar_one_or_none()
-
-
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 @router.post("/register", response_model=TokenResponse)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(User).where(User.email == body.email))
@@ -108,20 +95,23 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         name=body.name,
         hashed_pw=hash_password(body.password),
         credits=settings.FREE_TIER_DOCS,
+        credits_used=0  # Explicitly set
     )
     db.add(user)
-    # BUG FIX 2: flush() assigns the ID but never wrote to DB — added commit()
-    await db.flush()
     await db.commit()
+    await db.refresh(user)
 
     token = create_access_token({"sub": str(user.id)})
     return TokenResponse(
         access_token=token,
-        user_id=str(user.id),
-        email=user.email,
-        credits=user.credits,
+        user=UserResponse(
+            id=str(user.id),
+            email=user.email,
+            name=user.name,
+            credits=user.credits,
+            credits_used=user.credits_used
+        )
     )
-
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
@@ -136,22 +126,25 @@ async def login(
     token = create_access_token({"sub": str(user.id)})
     return TokenResponse(
         access_token=token,
-        user_id=str(user.id),
-        email=user.email,
-        credits=user.credits,
+        user=UserResponse(
+            id=str(user.id),
+            email=user.email,
+            name=user.name,
+            credits=user.credits,
+            credits_used=user.credits_used
+        )
     )
 
-
-@router.get("/me")
+@router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
-    return {
-        "id": str(user.id),
-        "email": user.email,
-        "name": user.name,
-        "credits": user.credits,
-        "created_at": user.created_at,
-    }
-
+    # This route is the heart of the Stripe credit polling
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        credits=user.credits,
+        credits_used=user.credits_used
+    )
 
 @router.post("/api-keys", response_model=ApiKeyResponse)
 async def create_api_key(
@@ -166,16 +159,15 @@ async def create_api_key(
         name=body.name,
     )
     db.add(key_obj)
-    # BUG FIX 2 (same pattern): flush + commit so the key is actually persisted
-    await db.flush()
     await db.commit()
+    await db.refresh(key_obj)
+    
     return ApiKeyResponse(
         id=str(key_obj.id),
         name=key_obj.name,
-        key=raw_key,   # shown ONCE — not stored in plain text in prod
+        key=raw_key,
         created_at=key_obj.created_at,
     )
-
 
 @router.get("/api-keys")
 async def list_api_keys(
@@ -196,7 +188,6 @@ async def list_api_keys(
         }
         for k in keys
     ]
-
 
 @router.delete("/api-keys/{key_id}")
 async def revoke_api_key(

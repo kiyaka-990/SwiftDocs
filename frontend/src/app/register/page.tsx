@@ -1,76 +1,77 @@
-// src/app/register/page.tsx
 "use client"
 import { useState } from "react"
 import { useAuthStore } from "@/lib/store"
 import { useRouter } from "next/navigation"
 import toast from "react-hot-toast"
-import { Zap, Check } from "lucide-react"
 import Link from "next/link"
+import { Zap, Loader2, CheckCircle2 } from "lucide-react"
 
-export default function RegisterPage() {
+export default function Register() {
   const { register } = useAuthStore()
   const router = useRouter()
-  const [form, setForm] = useState({ name: "", email: "", password: "" })
   const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState({ email: "", name: "", password: "" })
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }))
-
-  async function submit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
       await register(form.email, form.name, form.password)
-      toast.success("Account created! 3 free docs added.")
+      toast.success("Welcome to SwiftDocs!")
       router.push("/dashboard")
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || err?.message || "Registration failed")
+      toast.error(err.response?.data?.detail || "Registration failed")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-dark-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Zap className="w-7 h-7 text-brand-500" />
-            <span className="text-2xl font-bold">SwiftDocs</span>
+    <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center p-6 selection:bg-brand-500/30">
+      <div className="w-full max-w-md bg-[#0d0d10] border border-white/5 p-10 rounded-[40px] shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-500 to-transparent opacity-50" />
+        
+        <div className="flex flex-col items-center mb-10 text-center">
+          <div className="p-3 bg-brand-500 rounded-2xl mb-4 shadow-lg shadow-brand-500/20">
+            <Zap className="w-6 h-6 text-white fill-white" />
           </div>
-          <p className="text-gray-400">Create your free account</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Create your account</h1>
+          
+          {/* YOUR REQUESTED GREEN HIGHLIGHT */}
+          <div className="mt-4 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full flex items-center gap-2 animate-pulse">
+            <CheckCircle2 size={14} className="text-green-400" />
+            <span className="text-[11px] font-bold text-green-400 uppercase tracking-wide">
+              3 free documents included — no credit card required
+            </span>
+          </div>
         </div>
 
-        {/* Free tier callout */}
-        <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-xl mb-6 text-sm text-green-400">
-          <Check className="w-4 h-4 shrink-0" />
-          3 free documents included — no credit card required
-        </div>
-
-        <form onSubmit={submit} className="card space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-1.5">Full name</label>
-            <input value={form.name} onChange={set("name")}
-              className="input" placeholder="Jane Doe" required />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1.5">Email</label>
-            <input type="email" value={form.email} onChange={set("email")}
-              className="input" placeholder="you@example.com" required />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1.5">Password</label>
-            <input type="password" value={form.password} onChange={set("password")}
-              className="input" placeholder="Min 8 characters" required minLength={8} />
-          </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3">
-            {loading ? "Creating account…" : "Create free account"}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input 
+            placeholder="Full Name" required
+            className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-brand-500/50 transition-all"
+            onChange={e => setForm({ ...form, name: e.target.value })}
+          />
+          <input 
+            type="email" placeholder="Email Address" required
+            className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-brand-500/50 transition-all"
+            onChange={e => setForm({ ...form, email: e.target.value })}
+          />
+          <input 
+            type="password" placeholder="Password" required
+            className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-brand-500/50 transition-all"
+            onChange={e => setForm({ ...form, password: e.target.value })}
+          />
+          <button 
+            disabled={loading}
+            className="w-full bg-brand-500 text-white py-4 rounded-2xl font-bold hover:brightness-110 hover:shadow-xl hover:shadow-brand-500/20 transition-all flex justify-center items-center gap-2"
+          >
+            {loading ? <Loader2 className="animate-spin" size={20} /> : "Get Started"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Already have an account?{" "}
-          <Link href="/login" className="text-brand-500 hover:underline">Sign in</Link>
+        <p className="text-center text-gray-500 text-sm mt-8">
+          Already have an account? <Link href="/login" className="text-brand-500 font-bold hover:text-brand-400 transition">Login</Link>
         </p>
       </div>
     </div>

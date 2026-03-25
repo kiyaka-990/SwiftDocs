@@ -2,7 +2,6 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import api from "./api"
 
-// 1. Added credits_used to the User interface
 interface User {
   id: string
   email: string
@@ -15,9 +14,8 @@ interface AuthStore {
   user: User | null
   token: string | null
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, name: string, password: string) => Promise<void>
+  register: (email: string, name: string, password: string) => Promise<void> // RESTORED
   logout: () => void
-  // 2. Updated to return Promise<boolean> for truthiness checks
   refreshMe: () => Promise<boolean> 
 }
 
@@ -32,31 +30,23 @@ export const useAuthStore = create<AuthStore>()(
         const { data } = await api.post("/auth/login", form, {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
         })
+        
+        // Use the nested 'user' object from our updated TokenResponse
         api.defaults.headers.common["Authorization"] = `Bearer ${data.access_token}`
         set({
           token: data.access_token,
-          user: { 
-            id: data.user_id, 
-            email: data.email, 
-            name: "", 
-            credits: data.credits,
-            credits_used: data.credits_used ?? 0 // Default to 0
-          },
+          user: data.user, 
         })
       },
 
       register: async (email, name, password) => {
         const { data } = await api.post("/auth/register", { email, name, password })
+        
+        // Use the nested 'user' object from our updated TokenResponse
         api.defaults.headers.common["Authorization"] = `Bearer ${data.access_token}`
         set({
           token: data.access_token,
-          user: { 
-            id: data.user_id, 
-            email: data.email, 
-            name, 
-            credits: data.credits,
-            credits_used: data.credits_used ?? 0
-          },
+          user: data.user,
         })
       },
 
@@ -67,19 +57,15 @@ export const useAuthStore = create<AuthStore>()(
 
       refreshMe: async () => {
         try {
+          const prevCredits = get().user?.credits ?? 0
           const { data } = await api.get("/auth/me")
-          const currentUser = get().user
           
-          // Check if credits actually changed (useful for Stripe polling)
-          const creditsChanged = currentUser ? data.credits > currentUser.credits : false
+          set({ user: data })
           
-          set((s) => ({ 
-            user: s.user ? { ...s.user, ...data } : data 
-          }))
-          
-          return creditsChanged // Now the dashboard can test this for "truthiness"
+          // Boolean check for Stripe polling in Dashboard
+          return data.credits > prevCredits
         } catch (error) {
-          console.error("Failed to refresh user", error)
+          console.error("Refresh failed", error)
           return false
         }
       },
