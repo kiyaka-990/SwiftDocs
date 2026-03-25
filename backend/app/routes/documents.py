@@ -131,10 +131,9 @@ async def generate(
     if user.credits < 1:
         raise HTTPException(402, "Insufficient credits")
 
-    # 1. Update credits immediately
+    # 1. Atomic update to user stats
     user.credits -= 1
-    if hasattr(user, 'credits_used'):
-        user.credits_used += 1
+    user.credits_used += 1
 
     doc = Document(
         user_id=user.id,
@@ -145,14 +144,11 @@ async def generate(
     )
     db.add(doc)
     
-    # 2. COMMIT NOW. This prevents the 502 error by closing the request quickly.
+    # 2. COMMIT IMMEDIATELY. This closes the HTTP request and prevents the 502 error.
     await db.commit() 
     await db.refresh(doc)
     
-    # 3. Ensure output directory exists (using /tmp for Railway stability)
-    output_dir = "/tmp/outputs"
-    os.makedirs(output_dir, exist_ok=True)
-    
+    # 3. Start the heavy lifting in the background
     background_tasks.add_task(generate_task, str(doc.id), body.template, body.payload)
     
     return GenerateResponse(
