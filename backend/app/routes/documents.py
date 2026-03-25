@@ -128,11 +128,14 @@ async def generate(
     user: User = Depends(get_user_flexible),
     db: AsyncSession = Depends(get_db),
 ):
-    if body.template not in VALID_TEMPLATES:
-        raise HTTPException(400, f"Unknown template. Valid: {VALID_TEMPLATES}")
     if user.credits < 1:
         raise HTTPException(402, "Insufficient credits")
+
+    # 1. Update credits immediately
     user.credits -= 1
+    if hasattr(user, 'credits_used'):
+        user.credits_used += 1
+
     doc = Document(
         user_id=user.id,
         template=body.template,
@@ -141,17 +144,22 @@ async def generate(
         credits_used=1,
     )
     db.add(doc)
-    await db.flush()
-    doc_id = str(doc.id)
-    await db.commit()
-    background_tasks.add_task(generate_task, doc_id, body.template, body.payload)
+    
+    # 2. COMMIT NOW. This prevents the 502 error by closing the request quickly.
+    await db.commit() 
+    await db.refresh(doc)
+    
+    # 3. Ensure output directory exists (using /tmp for Railway stability)
+    output_dir = "/tmp/outputs"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    background_tasks.add_task(generate_task, str(doc.id), body.template, body.payload)
+    
     return GenerateResponse(
-        document_id=doc_id,
+        document_id=str(doc.id),
         status="pending",
-        download_url=None,
         credits_remaining=user.credits,
     )
-
 
 @router.get("/{doc_id}/download")
 async def download(
