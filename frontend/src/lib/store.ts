@@ -1,13 +1,14 @@
-// src/lib/store.ts
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import api from "./api"
 
+// 1. Added credits_used to the User interface
 interface User {
   id: string
   email: string
   name: string
   credits: number
+  credits_used: number 
 }
 
 interface AuthStore {
@@ -16,7 +17,8 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, name: string, password: string) => Promise<void>
   logout: () => void
-  refreshMe: () => Promise<void>
+  // 2. Updated to return Promise<boolean> for truthiness checks
+  refreshMe: () => Promise<boolean> 
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -33,7 +35,13 @@ export const useAuthStore = create<AuthStore>()(
         api.defaults.headers.common["Authorization"] = `Bearer ${data.access_token}`
         set({
           token: data.access_token,
-          user: { id: data.user_id, email: data.email, name: "", credits: data.credits },
+          user: { 
+            id: data.user_id, 
+            email: data.email, 
+            name: "", 
+            credits: data.credits,
+            credits_used: data.credits_used ?? 0 // Default to 0
+          },
         })
       },
 
@@ -42,7 +50,13 @@ export const useAuthStore = create<AuthStore>()(
         api.defaults.headers.common["Authorization"] = `Bearer ${data.access_token}`
         set({
           token: data.access_token,
-          user: { id: data.user_id, email: data.email, name, credits: data.credits },
+          user: { 
+            id: data.user_id, 
+            email: data.email, 
+            name, 
+            credits: data.credits,
+            credits_used: data.credits_used ?? 0
+          },
         })
       },
 
@@ -52,8 +66,22 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       refreshMe: async () => {
-        const { data } = await api.get("/auth/me")
-        set((s) => ({ user: { ...s.user!, ...data } }))
+        try {
+          const { data } = await api.get("/auth/me")
+          const currentUser = get().user
+          
+          // Check if credits actually changed (useful for Stripe polling)
+          const creditsChanged = currentUser ? data.credits > currentUser.credits : false
+          
+          set((s) => ({ 
+            user: s.user ? { ...s.user, ...data } : data 
+          }))
+          
+          return creditsChanged // Now the dashboard can test this for "truthiness"
+        } catch (error) {
+          console.error("Failed to refresh user", error)
+          return false
+        }
       },
     }),
     {
