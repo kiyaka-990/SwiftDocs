@@ -10,8 +10,14 @@ from app.routes import auth, documents, billing, templates, webhooks
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        # Serverless (Vercel): don't crash the function at cold start when the
+        # database isn't configured yet. Routes that need the DB will surface
+        # the connection error themselves.
+        print(f"[lifespan] WARNING: database init failed: {e}", flush=True)
     yield
     await engine.dispose()
 
