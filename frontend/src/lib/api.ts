@@ -2,7 +2,7 @@
 import axios from "axios"
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://swiftdocs-production.up.railway.app/api",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "/api",
   timeout: 30_000,
 })
 

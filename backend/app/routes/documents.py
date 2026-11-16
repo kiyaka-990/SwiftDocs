@@ -21,6 +21,11 @@ router = APIRouter()
 
 VALID_TEMPLATES = {"catalogue", "invoice", "letter", "price_schedule", "spec_sheet"}
 
+# On Vercel only /tmp is writable; Docker/Railway keep /app/outputs.
+OUTPUT_DIR = settings.OUTPUT_DIR or (
+    "/tmp/swiftdocs_outputs" if os.environ.get("VERCEL") else "/app/outputs"
+)
+
 
 class GenerateRequest(BaseModel):
     template: str
@@ -61,6 +66,31 @@ async def get_user_flexible(
 
 
 async def call_engine(template: str, payload: dict, output_path: str) -> dict:
+    """Generate a PDF with the Rust engine and write it to output_path.
+
+    Two transports:
+      - Vercel: the engine is a container service reached via the ENGINE_URL
+        service binding (injected by Vercel). We POST JSON and receive PDF bytes.
+      - Local / Docker: no ENGINE_URL, so we exec the CLI binary like before.
+    """
+    if settings.ENGINE_URL:
+        import httpx
+
+        base = settings.ENGINE_URL.rstrip("/")
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{base}/render", json={"template": template, "payload": payload}
+            )
+        if resp.status_code != 200:
+            try:
+                detail = resp.json().get("error", resp.text)
+            except Exception:
+                detail = resp.text
+            raise RuntimeError(f"Engine error ({resp.status_code}): {detail}")
+        with open(output_path, "wb") as f:
+            f.write(resp.content)
+        return {"ok": True, "bytes": resp.headers.get("x-engine-bytes", str(len(resp.content)))}
+
     # Write payload to a temp file instead of passing it as a CLI string.
     # This avoids all shell quoting / BOM issues on every OS.
     with tempfile.NamedTemporaryFile(
@@ -93,6 +123,29 @@ async def call_engine(template: str, payload: dict, output_path: str) -> dict:
             pass
 
 
+def s3_client():
+    """Lazy boto3 client; returns None when AWS credentials aren't configured."""
+    if not (settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY):
+        return None
+    import boto3
+
+    return boto3.client("s3")
+
+
+def upload_pdf(doc_id: str, local_path: str):
+    """Upload the generated PDF to S3 when configured (serverless-safe storage)."""
+    client = s3_client()
+    if not client:
+        return None
+    key = f"documents/{doc_id}.pdf"
+    try:
+        client.upload_file(local_path, settings.AWS_BUCKET_NAME, key)
+        return key
+    except Exception as e:
+        print(f"[upload_pdf] failed for {doc_id}: {e}", flush=True)
+        return None
+
+
 async def generate_task(doc_id: str, template: str, payload: dict):
     from app.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
@@ -106,14 +159,14 @@ async def generate_task(doc_id: str, template: str, payload: dict):
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 tmp_path = tmp.name
             engine_result = await call_engine(template, payload, tmp_path)
-            local_dir = "/app/outputs"
-            os.makedirs(local_dir, exist_ok=True)
-            local_file = f"{local_dir}/{doc_id}.pdf"
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            local_file = f"{OUTPUT_DIR}/{doc_id}.pdf"
             shutil.copy(tmp_path, local_file)
             os.unlink(tmp_path)
+            upload_pdf(doc_id, local_file)
             doc.status = "done"
             doc.file_url = f"/documents/{doc_id}/download"
-            doc.file_size = engine_result.get("bytes", 0)
+            doc.file_size = int(engine_result.get("bytes", 0) or 0)
             await db.commit()
         except Exception as e:
             doc.status = "failed"
@@ -148,11 +201,25 @@ async def generate(
     await db.commit() 
     await db.refresh(doc)
     
+    doc_id = str(doc.id)
+
+    if os.environ.get("VERCEL"):
+        # Serverless: the process may be frozen/terminated right after the
+        # response, so a BackgroundTask could never run. The engine renders in
+        # milliseconds, so generate inline and return a finished document.
+        await generate_task(doc_id, body.template, body.payload)
+        return GenerateResponse(
+            document_id=doc_id,
+            status="done",
+            download_url=f"/documents/{doc_id}/download",
+            credits_remaining=user.credits,
+        )
+
     # 3. Start the heavy lifting in the background
-    background_tasks.add_task(generate_task, str(doc.id), body.template, body.payload)
+    background_tasks.add_task(generate_task, doc_id, body.template, body.payload)
     
     return GenerateResponse(
-        document_id=str(doc.id),
+        document_id=doc_id,
         status="pending",
         credits_remaining=user.credits,
     )
@@ -172,7 +239,21 @@ async def download(
     doc = result.scalar_one_or_none()
     if not doc:
         raise HTTPException(404, "Document not found")
-    path = f"/app/outputs/{doc_id}.pdf"
+
+    from fastapi.responses import RedirectResponse
+
+    # S3 is the durable store; /tmp copies are ephemeral on serverless.
+    if doc.s3_key:
+        client = s3_client()
+        if client:
+            url = client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": settings.AWS_BUCKET_NAME, "Key": doc.s3_key},
+                ExpiresIn=3600,
+            )
+            return RedirectResponse(url)
+
+    path = f"{OUTPUT_DIR}/{doc_id}.pdf"
     if not os.path.exists(path):
         raise HTTPException(404, "File not found")
     return FileResponse(path, media_type="application/pdf", filename=f"{doc.template}-{doc_id[:8]}.pdf")

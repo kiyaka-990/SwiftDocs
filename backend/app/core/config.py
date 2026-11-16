@@ -18,6 +18,13 @@ class Settings(BaseSettings):
 
     ENGINE_BIN: str = "./engine/target/release/swiftdocs_engine"
 
+    # Vercel service binding: internal URL of the Rust engine container service.
+    # When set, the backend calls the engine over HTTP instead of a subprocess.
+    ENGINE_URL: str = ""
+
+    # Where generated PDFs are stored locally. On Vercel only /tmp is writable.
+    OUTPUT_DIR: str = ""
+
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_BUCKET_NAME: str = "swiftdocs-outputs"
