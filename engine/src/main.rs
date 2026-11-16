@@ -102,20 +102,20 @@ async fn health() -> Json<Value> {
 
 async fn render(Json(body): Json<RenderRequest>) -> Response {
     match render_template(&body.template, &body.payload) {
-        Ok(pdf_bytes) => (
-            StatusCode::OK,
-            [
-                (header::CONTENT_TYPE, "application/pdf"),
-                (header::CACHE_CONTROL, "no-store"),
-                (
-                    header::HeaderName::from_static("x-engine-bytes"),
-                    header::HeaderValue::from_str(&pdf_bytes.len().to_string())
-                        .unwrap_or(header::HeaderValue::from_static("0")),
-                ),
-            ],
-            Bytes::from(pdf_bytes),
-        )
-            .into_response(),
+        Ok(pdf_bytes) => {
+            let mut headers = header::HeaderMap::new();
+            headers.insert(header::CONTENT_TYPE, header::HeaderValue::from_static("application/pdf"));
+            headers.insert(header::CACHE_CONTROL, header::HeaderValue::from_static("no-store"));
+            if let Ok(v) = header::HeaderValue::from_str(&pdf_bytes.len().to_string()) {
+                headers.insert(header::HeaderName::from_static("x-engine-bytes"), v);
+            }
+            (
+                StatusCode::OK,
+                headers,
+                Bytes::from(pdf_bytes),
+            )
+                .into_response()
+        }
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "ok": false, "error": e.to_string() })),
